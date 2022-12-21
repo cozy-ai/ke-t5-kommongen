@@ -1,0 +1,15 @@
+t5==0.9.1
+seqio
+konlpy==0.5.2
+transformers==4.5.1
+nltk==3.6.2
+tqdm==4.6.2
+datasets==1.12.1
+rouge-score==0.0.4
+sentencepiece==0.1.96
+evaluate
+accelerate
+sacrebleu >= 1.4.12
+py7zr
+torch==1.11.0
+pytorch-lightning
