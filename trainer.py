@@ -13,7 +13,6 @@ from transformers import (
 
 def get_dataset(tokenizer, type_path, args):
     print(args.data_dir)
-    data_dir_leaf = args.data_dir.split("/")[-1]
     return SummarizationDataset(tokenizer=tokenizer, data_dir=args.data_dir, type_path=type_path, max_source_length=args.max_source_length, max_target_length=args.max_target_length)
 
 
@@ -22,7 +21,8 @@ class T5FineTuner(pl.LightningModule):
         super(T5FineTuner, self).__init__()
         if isinstance(hparams, dict):
             hparams = argparse.Namespace(**hparams)
-        self.hparams = hparams
+        # self.hparams = hparams
+        self.save_hyperparameters(hparams)
         print("Model params: ", self.hparams)
 
         model_name = 'KETI-AIR/ke-t5-base'
@@ -60,23 +60,23 @@ class T5FineTuner(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self._step(batch)
+        self.log_dict({"train_loss": loss})
 
-        tensorboard_logs = {"train_loss": loss}
-        return {"loss": loss, "log": tensorboard_logs}
+        return {"loss": loss}
 
     def training_epoch_end(self, outputs):
         avg_train_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        tensorboard_logs = {"avg_train_loss": avg_train_loss}
-        return {"avg_train_loss": avg_train_loss, "log": tensorboard_logs, 'progress_bar': tensorboard_logs}
+        self.log_dict({"avg_train_loss": avg_train_loss})
 
     def validation_step(self, batch, batch_idx):
         loss = self._step(batch)
+        self.log_dict({"val_loss": loss})
+        
         return {"val_loss": loss}
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-        tensorboard_logs = {"val_loss": avg_loss}
-        return {"avg_val_loss": avg_loss, "log": tensorboard_logs, 'progress_bar': tensorboard_logs}
+        self.log_dict({"avg_val_loss": avg_loss})
 
     def configure_optimizers(self):
         "Prepare optimizer and schedule (linear warmup and decay)"
@@ -96,6 +96,21 @@ class T5FineTuner(pl.LightningModule):
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, eps=self.hparams.adam_epsilon)
         self.opt = optimizer
         return [optimizer]
+
+    def optimizer_step(
+            self,
+            epoch,
+            batch_idx,
+            optimizer,
+            optimizer_idx,
+            optimizer_closure,
+            on_tpu,
+            using_native_amp,
+            using_lbfgs,
+        ):
+            super().optimizer_step(
+                epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure, on_tpu, using_native_amp, using_lbfgs
+            )
 
     def get_tqdm_dict(self):
         tqdm_dict = {"loss": "{:.3f}".format(self.trainer.avg_loss), "lr": self.lr_scheduler.get_last_lr()[-1]}

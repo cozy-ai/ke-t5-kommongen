@@ -144,3 +144,4 @@ dmypy.json
 wandb/
 lightning_logs/
 outputs/
+tb_logs/

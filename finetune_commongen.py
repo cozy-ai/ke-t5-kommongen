@@ -1,5 +1,6 @@
 from logger import LoggingCallback
 from custom_checkpoint import CustomCheckpointCallback
+from pytorch_lightning.loggers import TensorBoardLogger
 import random
 import numpy as np
 import torch
@@ -8,6 +9,7 @@ import os
 import re
 import glob
 import wandb
+import datetime
 import pytorch_lightning as pl
 from trainer import *
 
@@ -54,7 +56,7 @@ def run():
 
     parser.add_argument('--data_dir', type=str, default="datasets/final",
                         help='Path for Data files')
-    parser.add_argument('--output_dir', type=str, default="outputs",
+    parser.add_argument('--output_dir', type=str, default="outputs/commongen_concept_output_epoch10",
                         help='Path to save the checkpoints')
     parser.add_argument('--checkpoint_dir', type=str, default="",
                         help='Checkpoint directory')
@@ -105,12 +107,6 @@ def run():
     parser.add_argument('--seed', type=int, default=42,
                         help='Manual Seed Value')
     parser.add_argument('--log_to_wandb', '-w', type=bool, default=True)
-
-    if args.log_to_wandb:
-        wandb.init(
-            project='COZY-KE-T5-Kommongen', 
-            sync_tensorboard=True
-        )
     
     args = parser.parse_known_args()[0]
     print(args)
@@ -123,27 +119,39 @@ def run():
         print("Creating output directory")
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=args.output_dir, filename="/{epoch}-{val_loss:.6f}", monitor="val_loss", mode="min", save_top_k=1
+        dirpath=args.output_dir, filename="{epoch}-{val_loss:.6f}", monitor="val_loss", mode="min", save_top_k=1
     )
 
-    trainer_custom_callbacks = [LoggingCallback()]
+    trainer_custom_callbacks = [LoggingCallback(), checkpoint_callback]
     if args.save_every_n_steps != -1:
         custom_checkpoint_callback = CustomCheckpointCallback(
             filepath=args.output_dir, prefix="checkpoint_", save_every_n_steps=args.save_every_n_steps
         )
         trainer_custom_callbacks.append(custom_checkpoint_callback)
 
+    date = datetime.datetime.now().strftime("%m-%d-%H-%M-%S")
+    run_name = "{}_{}".format(
+        args.model, date
+    )
+    logger = TensorBoardLogger("tb_logs", name=run_name)
+    if args.log_to_wandb:
+        wandb.init(
+            project='COZY-KE-T5-Kommongen', 
+            name=run_name,
+            sync_tensorboard=True
+        )
+
     train_params = dict(
-        accumulate_grad_batches=args.gradient_accumulation_steps,
         gpus=args.gpu_nums,
         max_epochs=args.num_train_epochs,
-        # early_stop_callback=args.early_stop_callback,
         precision=16 if args.fp_16 else 32,
         amp_level=args.opt_level,
         gradient_clip_val=args.max_grad_norm,
-        checkpoint_callback=checkpoint_callback,
+        accumulate_grad_batches=args.gradient_accumulation_steps,
         callbacks=trainer_custom_callbacks,
-        distributed_backend='ddp'
+        amp_backend='apex',
+        strategy='dp',
+        logger=logger,
     )
 
     if len(args.checkpoint_dir) != 0:

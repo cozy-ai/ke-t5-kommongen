@@ -10,7 +10,7 @@ for file_name in file_names:
         with open(f'datasets/raw/{file_name}', 'r') as f:
             for line in f:
                 data = json.loads(line)
-                concept.append(f'generate a sentence with these concepts: {data["concept-set"]}')
+                concept.append(f'summarize: {data["concept-set"]}')
                 scene.append(data["scene"])
             f.close()
         with open(f'datasets/final/{file_type}.source', 'w') as f:
